@@ -4,8 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Student Coding Performance Dashboard</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
   :root {
     --bg: #f5f2eb;
@@ -30,7 +30,7 @@
 
   body {
     background: var(--bg);
-    color: var(--);
+    color: var(--ink);
     font-family: var(--font-mono);
     min-height: 100vh;
     padding: 0;
@@ -39,7 +39,7 @@
   /* TOPBAR */
   .topbar {
     background: var(--ink);
-    color: #aaa ;
+    color: #aaa;
     padding: 18px 40px;
     display: flex;
     align-items: center;
@@ -53,12 +53,40 @@
     letter-spacing: -0.5px;
   }
   .topbar-title span { color: var(--easy); }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
   .topbar-meta {
     font-size: 0.72rem;
     color: #aaa;
     letter-spacing: 1px;
     text-transform: uppercase;
   }
+
+  /* PDF DOWNLOAD BUTTON */
+  .pdf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    background: var(--easy);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.12s;
+    box-shadow: 0 2px 8px rgba(61,153,112,0.35);
+  }
+  .pdf-btn:hover { background: #2d7a58; transform: translateY(-1px); }
+  .pdf-btn:active { transform: translateY(0); }
+  .pdf-btn svg { flex-shrink: 0; }
 
   /* MAIN LAYOUT */
   .main {
@@ -386,13 +414,58 @@
     .main { padding: 24px 16px 40px; }
     .topbar { padding: 14px 16px; }
   }
+
+  /* ===================== PRINT / PDF STYLES ===================== */
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    body { background: var(--bg) !important; }
+
+    .topbar { background: var(--ink) !important; border-bottom: 3px solid var(--easy) !important; }
+
+    .pdf-btn { display: none !important; }
+
+    .filter-bar, .search-box, .pagination { display: none !important; }
+
+    .main { padding: 20px 24px 40px; max-width: 100%; }
+
+    .metrics-row { grid-template-columns: repeat(5, 1fr); break-inside: avoid; }
+
+    .charts-row { grid-template-columns: 1fr 1fr; }
+
+    .chart-card, .metric-card, .table-card { break-inside: avoid; box-shadow: none; border: 1.5px solid var(--border) !important; }
+
+    .chart-wide { grid-column: 1 / -1; }
+
+    canvas { max-width: 100% !important; }
+
+    table { font-size: 0.72rem; }
+
+    /* Show ALL rows in print — pagination hidden, table shows full data */
+    #tableBody tr { display: table-row !important; }
+
+    @page {
+      margin: 12mm 10mm;
+      size: A4 landscape;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="topbar-title"><span>Alliance University</span> — Student Performance Report</div>
-  <div class="topbar-meta">LeetCode Tracker · 56 Students </div>
+  <div class="topbar-title"><span>Alliance University I BCA</span> — Student Performance Report</div>
+  <div class="topbar-right">
+    <div class="topbar-meta">LeetCode Tracker · 56 Students</div>
+    <button class="pdf-btn" onclick="downloadPDF()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Download PDF
+    </button>
+  </div>
 </div>
 
 <div class="main">
@@ -477,7 +550,7 @@
 
 <script>
 const RAW = [
-  {sno:1,  name:"A Praisy Emberline",          easy:0, medium:0, hard:0},
+  {sno:1,  name:"Praisy Emberline",          easy:0, medium:0, hard:0},
   {sno:2,  name:"Govindappagari Sahana",        easy:4, medium:13,hard:3},
   {sno:3,  name:"Tanushree K S",                easy:1, medium:0, hard:0},
   {sno:4,  name:"Kabilavarshini G",             easy:0, medium:0, hard:0},
@@ -548,6 +621,39 @@ const totalProblems = totalEasy + totalMedium + totalHard;
 const activeStudents = data.filter(d => d.total > 0).length;
 const avgSolved = (totalProblems / data.length).toFixed(1);
 
+// --- PDF DOWNLOAD ---
+function downloadPDF() {
+  // Temporarily show all rows before printing
+  const tbody = document.getElementById('tableBody');
+  const savedHTML = tbody.innerHTML;
+  const savedPaginationDisplay = document.querySelector('.pagination').style.display;
+
+  // Render all data rows for print
+  const allRows = [...data].sort((a, b) => a.rank - b.rank);
+  tbody.innerHTML = allRows.map((s, i) => {
+    const pct = maxTotal > 0 ? (s.total / maxTotal) * 100 : 0;
+    const isTop = s.rank <= 3 && s.total > 0;
+    return `<tr class="${s.total === 0 ? 'no-attempt' : ''}">
+      <td class="td-sno">${i + 1}</td>
+      <td class="td-name">${s.name}${isTop ? `<span class="topper-tag">#${s.rank}</span>` : ''}</td>
+      <td><span class="badge ${s.easy > 0 ? 'badge-easy' : 'badge-zero'}">${s.easy}</span></td>
+      <td><span class="badge ${s.medium > 0 ? 'badge-medium' : 'badge-zero'}">${s.medium}</span></td>
+      <td><span class="badge ${s.hard > 0 ? 'badge-hard' : 'badge-zero'}">${s.hard}</span></td>
+      <td><strong>${s.total}</strong></td>
+      <td>
+        <div class="total-bar-wrap"><div class="total-bar-fill" style="width:${pct}%"></div></div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  window.print();
+
+  // Restore paginated view after print dialog closes
+  setTimeout(() => {
+    tbody.innerHTML = savedHTML;
+  }, 500);
+}
+
 // --- METRICS ---
 function renderMetrics() {
   const metrics = [
@@ -568,29 +674,55 @@ function renderMetrics() {
 
 // --- CHARTS ---
 function renderCharts() {
-  // Difficulty Doughnut
+  // Difficulty Doughnut — with always-visible value labels
+  const doughnutLabelPlugin = {
+    id: 'doughnutLabels',
+    afterDatasetDraw(chart) {
+      const { ctx, data } = chart;
+      const meta = chart.getDatasetMeta(0);
+      const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+      meta.data.forEach((arc, i) => {
+        const val = data.datasets[0].data[i];
+        if (val === 0) return;
+        const pct = ((val / total) * 100).toFixed(1);
+        const { x, y } = arc.tooltipPosition();
+        ctx.save();
+        ctx.font = 'bold 12px DM Mono, monospace';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${val}`, x, y - 7);
+        ctx.font = '10px DM Mono, monospace';
+        ctx.fillText(`${pct}%`, x, y + 7);
+        ctx.restore();
+      });
+    }
+  };
+
   new Chart(document.getElementById('difficultyChart'), {
     type: 'doughnut',
+    plugins: [doughnutLabelPlugin],
     data: {
       labels: ['Easy', 'Medium', 'Hard'],
       datasets: [{
         data: [totalEasy, totalMedium, totalHard],
         backgroundColor: ['#3d9970','#e67e22','#c0392b'],
-        borderWidth: 0,
-        hoverOffset: 8,
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 10,
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      cutout: '65%',
+      cutout: '58%',
       plugins: {
         legend: { position: 'right', labels: { font: { family: 'DM Mono', size: 11 }, color: '#1a1714', padding: 14, boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} problems` } }
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} problems (${((ctx.raw/(totalEasy+totalMedium+totalHard))*100).toFixed(1)}%)` } }
       }
     }
   });
 
-  // Engagement Pie
+  // Engagement Bar
   const zero = data.filter(d => d.total === 0).length;
   const low = data.filter(d => d.total >= 1 && d.total <= 2).length;
   const mid = data.filter(d => d.total >= 3 && d.total <= 5).length;
@@ -617,22 +749,42 @@ function renderCharts() {
     }
   });
 
-  // Top 15 stacked bar
+  // Top 15 stacked bar + total line overlay (combo chart)
   const top15 = [...data].sort((a,b) => b.total - a.total).slice(0,15);
   new Chart(document.getElementById('topStudentsChart'), {
     type: 'bar',
     data: {
       labels: top15.map(s => s.name.split(' ')[0]),
       datasets: [
-        { label: 'Easy',   data: top15.map(s => s.easy),   backgroundColor: '#3d9970', borderRadius: 0 },
-        { label: 'Medium', data: top15.map(s => s.medium), backgroundColor: '#e67e22', borderRadius: 0 },
-        { label: 'Hard',   data: top15.map(s => s.hard),   backgroundColor: '#c0392b', borderRadius: 4 },
+        { label: 'Easy',   data: top15.map(s => s.easy),   backgroundColor: '#3d9970', borderRadius: 0, stack: 'stack0' },
+        { label: 'Medium', data: top15.map(s => s.medium), backgroundColor: '#e67e22', borderRadius: 0, stack: 'stack0' },
+        { label: 'Hard',   data: top15.map(s => s.hard),   backgroundColor: '#c0392b', borderRadius: 4, stack: 'stack0' },
+        {
+          label: 'Total',
+          data: top15.map(s => s.total),
+          type: 'line',
+          borderColor: '#2c5f8a',
+          backgroundColor: 'rgba(44,95,138,0.12)',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#2c5f8a',
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: false,
+          tension: 0.35,
+          yAxisID: 'y',
+          stack: undefined,
+          order: 0,
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          labels: { font: { family: 'DM Mono', size: 10 }, color: '#7a7368', boxWidth: 12, padding: 16 }
+        },
         tooltip: {
           callbacks: {
             title: (items) => top15[items[0].dataIndex].name,
@@ -714,7 +866,6 @@ function renderTable() {
     pageBtns.appendChild(btn);
   }
 
-  // Update sort arrows
   document.querySelectorAll('th').forEach(th => {
     th.classList.remove('sort-asc', 'sort-desc');
   });
