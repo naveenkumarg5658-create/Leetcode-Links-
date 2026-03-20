@@ -186,7 +186,7 @@
   .sort-col-btn { padding: 4px 12px; border-radius: 16px; border: none; background: transparent; font-family: var(--font-mono); font-size: 0.72rem; cursor: pointer; color: var(--muted); transition: all 0.16s; letter-spacing: 0.4px; }
   .sort-col-btn:hover { color: var(--ink); background: var(--surface); }
   .sort-col-btn.active { background: var(--ink); color: var(--bg); }
-  .sort-dir-btn { padding: 4px 10px; border-radius: 16px; border: 1.5px solid var(--border); background: var(--surface); font-family: var(--font-mono); font-size: 0.7rem; cursor: pointer; color: var(--accent); font-weight: 600; margin-left: 4px; transition: all 0.16s; white-space: nowrap; }
+  .sort-dir-btn { padding: 4px 10px; border-radius: 16px; border: 1.5px solid var(--border); background: var(--surface); font-family: var(--font-mono); font-size: 0.7rem; cursor: pointer; color: var(--accent); font-weight: 600; margin-left: 4px; transition: all 0.16px; white-space: nowrap; }
   .sort-dir-btn:hover { background: var(--surface2); }
 
   /* ── TABLE ── */
@@ -261,13 +261,12 @@
     <span class="sub">Leetcode Performance Tracker</span>
   </div>
   <div class="topbar-right">
-    <!-- Class Dropdown -->
     <div class="class-dropdown-wrap">
       <select class="class-select" id="classSelect" onchange="switchClass(this.value)">
         <option value="BCA_I">BCA I</option>
         <option value="BCA_II">BCA II</option>
         <option value="MCA_I">I MCA - A</option>
-        <option value="MCA_II"> I MCA - B</option>
+        <option value="MCA_II">I MCA - B</option>
       </select>
     </div>
     <img src="face prep campus .webp" alt="Logo" class="topbar-logo" onerror="this.style.display='none'"/>
@@ -283,13 +282,11 @@
 
 <div class="main">
 
-  <!-- Skeleton -->
   <div class="skeleton" id="skeleton">
     <div class="sk-spin"></div>
     Loading student data from Google Sheets…
   </div>
 
-  <!-- Dashboard (hidden until data loads) -->
   <div id="dashboard" style="display:none">
 
     <div class="class-label-bar">
@@ -384,16 +381,12 @@
 
   </div><!-- /#dashboard -->
 
-  <!-- ── BOTTOM STATUS BAR ── -->
   <div style="margin-top:28px">
-
-    <!-- Error banner -->
     <div class="err-banner" id="errBanner">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <div id="errText"></div>
     </div>
 
-    <!-- Live status bar -->
     <div class="live-bar" style="margin-bottom:0">
       <span class="live-dot loading" id="liveDot"></span>
       <span class="live-status" id="liveStatus">Connecting to Google Sheets…</span>
@@ -411,7 +404,6 @@
         <span id="syncTxt">Refresh Now</span>
       </button>
     </div>
-
   </div>
 
 </div>
@@ -462,7 +454,7 @@ function buildUrls(sheetId, sheetName) {
 let data = [], maxTotal = 0, chartInstances = {};
 let activeClass = 'BCA_I';
 let currentFilter = 'all', currentSearch = '', currentSort = {key:'total', dir:'desc'}, currentPage = 1;
-let cdVal = AUTO_REFRESH_SEC, cdTimer = null, firstLoad = true;
+let cdVal = AUTO_REFRESH_SEC, cdTimer = null;
 const PAGE_SIZE = 15;
 
 // ── TOAST ─────────────────────────────────────────────────────────────
@@ -503,21 +495,23 @@ function startCountdown() {
 }
 
 // ── SWITCH CLASS ──────────────────────────────────────────────────────
+// FIX: removed the early-return guard that blocked re-fetching on class switch;
+//      also removed `firstLoad` global — now each switchClass call is fresh.
 function switchClass(cls) {
-  if (cls === activeClass && !firstLoad) return;
   activeClass = cls;
   document.getElementById('classSelect').value = cls;
 
-  // Reset filters
+  // Reset filters & UI
   currentFilter = 'all'; currentSearch = ''; currentSort = {key:'total', dir:'desc'}; currentPage = 1;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.filter-btn').classList.add('active');
   document.querySelectorAll('.sort-col-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.sort-col-btn').classList.add('active');
   document.getElementById('sortDirBtn').textContent = '↓ Desc';
-  if (document.getElementById('searchInput')) document.getElementById('searchInput').value = '';
+  const si = document.getElementById('searchInput');
+  if (si) si.value = '';
 
-  // Update label
+  // Update label bar
   const cfg = CLASS_CONFIG[cls];
   document.getElementById('classLabelBadge').textContent = cfg.label;
   document.getElementById('classLabelName').textContent = cfg.name;
@@ -525,6 +519,10 @@ function switchClass(cls) {
 
   // Update sheet link
   document.getElementById('sheetLink').href = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/edit`;
+
+  // Show skeleton, hide dashboard while loading
+  document.getElementById('skeleton').classList.add('show');
+  document.getElementById('dashboard').style.display = 'none';
 
   fetchData(false);
 }
@@ -534,11 +532,6 @@ async function fetchData(manual = false) {
   if (manual) showToast('🔄 Refreshing from Google Sheets…', 'info', 2000);
   setStatus('loading', '<b>Fetching</b> from Google Sheets…');
   document.getElementById('errBanner').classList.remove('show');
-
-  if (firstLoad) {
-    document.getElementById('skeleton').classList.add('show');
-    document.getElementById('dashboard').style.display = 'none';
-  }
 
   const cfg = CLASS_CONFIG[activeClass];
 
@@ -550,6 +543,7 @@ async function fetchData(manual = false) {
         const res = await fetch(url, {cache: 'no-store'});
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const t = await res.text();
+        // Handle allorigins JSON wrapper
         if (t.trim().startsWith('{') && t.includes('"contents"')) {
           text = JSON.parse(t).contents;
         } else {
@@ -561,17 +555,13 @@ async function fetchData(manual = false) {
     if (!text || !text.trim()) throw new Error(lastErr?.message || 'All fetch strategies failed');
 
     const parsed = parseCSV(text);
-    if (!parsed.length) throw new Error('No student rows found. Check that the sheet has data.');
+    if (!parsed.length) throw new Error('No student rows found. Check that the sheet has data and the header row contains "Student Name", "Easy", "Medium", "Hard".');
 
     applyData(parsed);
     setStatus('ok', `<b>Live</b> — connected to Google Sheets · ${parsed.length} students`);
     markTime();
-
-    if (firstLoad) {
-      document.getElementById('skeleton').classList.remove('show');
-      document.getElementById('dashboard').style.display = 'block';
-      firstLoad = false;
-    }
+    document.getElementById('skeleton').classList.remove('show');
+    document.getElementById('dashboard').style.display = 'block';
     if (manual) showToast(`✓ Synced — ${parsed.length} students loaded`, 'success');
     startCountdown();
 
@@ -579,25 +569,25 @@ async function fetchData(manual = false) {
     setStatus('err', '<b>Connection error</b> — could not fetch data');
     document.getElementById('errBanner').classList.add('show');
     document.getElementById('errText').innerHTML =
-      `<b>Could not load data.</b> ${err.message}<br><br>
+      `<b>Could not load data for ${CLASS_CONFIG[activeClass].label}.</b> ${err.message}<br><br>
        <b>Checklist:</b><br>
-       1. Your sheet must be public: <em>Share → Anyone with the link → Viewer</em><br>
-       2. You must open this HTML file in a browser <b>with internet access</b><br>
-       3. Try a different browser (Chrome works best)<br>
-       4. If on a school/office network, the proxy may be blocking Google — try on mobile data`;
-
-    if (firstLoad) {
-      document.getElementById('skeleton').classList.remove('show');
-      applyData([]);
-      document.getElementById('dashboard').style.display = 'block';
-      firstLoad = false;
-    }
+       1. The sheet must be public: <em>Share → Anyone with the link → Viewer</em><br>
+       2. Open this file in a browser <b>with internet access</b><br>
+       3. Try Chrome or a different network (mobile data if on school Wi-Fi)<br>
+       4. Verify the Sheet ID in CLASS_CONFIG matches the actual Google Sheet URL`;
+    // Still show dashboard (empty state) rather than leaving blank
+    applyData([]);
+    document.getElementById('skeleton').classList.remove('show');
+    document.getElementById('dashboard').style.display = 'block';
     if (manual) showToast('✕ Could not reach Google Sheets', 'error', 5000);
     startCountdown();
   }
 }
 
 // ── PARSE CSV ─────────────────────────────────────────────────────────
+// FIX: Greatly expanded column alias matching so headers like
+//      "No of Easy", "No of Medium", "No of Hard", "Student Name" (with extra spaces),
+//      numbered columns, etc. are all detected correctly.
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) throw new Error('File appears empty');
@@ -613,32 +603,69 @@ function parseCSV(text) {
     return cells;
   });
 
-  // Find header row
+  // Find header row — scan first 8 rows for flexibility
   let hIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
-    const hasName = rows[i].some(c => /(student[\s]*name|^name$)/i.test(c.trim()));
-    const hasEasy = rows[i].some(c => /^easy$/i.test(c.trim()));
-    if (hasName && hasEasy) { hIdx = i; break; }
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const joined = rows[i].join('|').toLowerCase();
+    // Must contain something name-like AND at least one difficulty keyword
+    const hasName = /(student|name)/i.test(joined);
+    const hasDiff = /(easy|medium|hard)/i.test(joined);
+    if (hasName && hasDiff) { hIdx = i; break; }
   }
-  if (hIdx === -1) throw new Error('Could not find header row with "Student name" and "Easy" columns.');
+  // Fallback: any row containing all three difficulty words
+  if (hIdx === -1) {
+    for (let i = 0; i < Math.min(rows.length, 8); i++) {
+      const joined = rows[i].join('|').toLowerCase();
+      if (/easy/.test(joined) && /medium/.test(joined) && /hard/.test(joined)) {
+        hIdx = i; break;
+      }
+    }
+  }
+  if (hIdx === -1) {
+    const sample = rows.slice(0,4).map(r => r.join(' | ')).join('\n');
+    throw new Error(`Could not find header row. First rows of sheet:\n${sample}`);
+  }
 
-  const headers = rows[hIdx].map(h => h.toLowerCase().trim());
-  const col = (...aliases) => { for (const a of aliases) { const i = headers.findIndex(h => h === a || h.replace(/[\s.]/g,'') === a.replace(/[\s.]/g,'')); if (i >= 0) return i; } return -1; };
+  // Normalise header: lowercase, collapse whitespace
+  const headers = rows[hIdx].map(h => h.toLowerCase().replace(/\s+/g,' ').trim());
 
-  const nameC  = col('student name', 'name', 'studentname');
-  const easyC  = col('easy');
-  const medC   = col('medium', 'med');
-  const hardC  = col('hard');
-  const snoC   = col('s.no', 'sno', 's no', 'no', '#', 'serial');
+  // Flexible column finder — checks multiple aliases and partial matches
+  const col = (...aliases) => {
+    // Exact match first
+    for (const a of aliases) {
+      const i = headers.findIndex(h => h === a.toLowerCase());
+      if (i >= 0) return i;
+    }
+    // Partial / contains match
+    for (const a of aliases) {
+      const needle = a.toLowerCase();
+      const i = headers.findIndex(h => h.includes(needle) || needle.includes(h));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
 
-  if (nameC < 0 || easyC < 0 || medC < 0 || hardC < 0)
-    throw new Error(`Missing required columns. Headers found: [${headers.join(', ')}]`);
+  const nameC = col('student name', 'name', 'studentname', 'student');
+  const easyC = col('easy', 'no of easy', 'easy solved', 'easy problems', 'no.of easy');
+  const medC  = col('medium', 'med', 'no of medium', 'medium solved', 'medium problems', 'no.of medium');
+  const hardC = col('hard', 'no of hard', 'hard solved', 'hard problems', 'no.of hard');
+  const snoC  = col('s.no', 'sno', 's no', 'no', '#', 'serial', 'sl no', 'sl.no');
+
+  if (nameC < 0 || easyC < 0 || medC < 0 || hardC < 0) {
+    throw new Error(
+      `Missing required columns (found: [${headers.join(', ')}]).\n` +
+      `Need: "Student Name" (idx ${nameC}), "Easy" (idx ${easyC}), "Medium" (idx ${medC}), "Hard" (idx ${hardC}).\n` +
+      `Please ensure your MCA sheet headers exactly match one of: Student Name | Easy | Medium | Hard`
+    );
+  }
 
   const students = [];
   for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
-    const name = (r[nameC] || '').trim();
-    if (!name || /^[\s,]*$/.test(name)) continue;
+    // Skip rows that are completely empty or just commas
+    if (!r || r.every(c => !c.trim())) continue;
+    const name = (r[nameC] || '').trim().replace(/^"|"$/g, '');
+    if (!name || /^[-\s,]*$/.test(name)) continue;
     students.push({
       sno:    snoC >= 0 ? (parseInt(r[snoC]) || students.length + 1) : students.length + 1,
       name,
@@ -785,15 +812,18 @@ function renderCharts() {
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────
+// FIX: Removed the incorrect filter-by-sort-key lines.
+//      Sorting by "easy/medium/hard" now only controls the ORDER — it no longer
+//      hides students with 0 in that column.
 function getFiltered() {
   let d = [...data];
-  if (currentFilter === 'active') d = d.filter(s => s.total > 0);
+  if (currentFilter === 'active')   d = d.filter(s => s.total > 0);
   if (currentFilter === 'inactive') d = d.filter(s => s.total === 0);
-  if (currentSort.key === 'easy')   d = d.filter(s => s.easy > 0);
-  if (currentSort.key === 'medium') d = d.filter(s => s.medium > 0);
-  if (currentSort.key === 'hard')   d = d.filter(s => s.hard > 0);
-  if (currentSearch) { const q = currentSearch.toLowerCase(); d = d.filter(s => s.name.toLowerCase().includes(q)); }
-  d.sort((a,b) => {
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    d = d.filter(s => s.name.toLowerCase().includes(q));
+  }
+  d.sort((a, b) => {
     let va = a[currentSort.key], vb = b[currentSort.key];
     if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
     if (va < vb) return currentSort.dir === 'asc' ? -1 : 1;
@@ -821,7 +851,10 @@ function renderTable() {
       <td><div class="total-bar-wrap"><div class="total-bar-fill" style="width:${pct}%"></div></div></td>
     </tr>`;
   }).join('');
-  document.getElementById('paginationInfo').textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE,filtered.length)} of ${filtered.length} students`;
+  document.getElementById('paginationInfo').textContent =
+    filtered.length === 0
+      ? 'No students match this filter'
+      : `Showing ${start+1}–${Math.min(start+PAGE_SIZE,filtered.length)} of ${filtered.length} students`;
   const pb = document.getElementById('pageBtns'); pb.innerHTML = '';
   for (let i = 1; i <= totalPages; i++) {
     const btn = document.createElement('button');
@@ -832,16 +865,34 @@ function renderTable() {
   }
 }
 
-function setSortCol(key, btn) { currentSort.key=key; currentSort.dir='desc'; document.querySelectorAll('.sort-col-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); document.getElementById('sortDirBtn').textContent='↓ Desc'; currentPage=1; renderTable(); }
-function toggleSortDir() { currentSort.dir=currentSort.dir==='desc'?'asc':'desc'; document.getElementById('sortDirBtn').textContent=currentSort.dir==='desc'?'↓ Desc':'↑ Asc'; currentPage=1; renderTable(); }
-function setFilter(f, btn) { currentFilter=f; currentPage=1; document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderTable(); }
-function searchStudents(q) { currentSearch=q; currentPage=1; renderTable(); }
-function sortTable(key) { if(currentSort.key===key) currentSort.dir=currentSort.dir==='asc'?'desc':'asc'; else currentSort={key,dir:'desc'}; renderTable(); }
+function setSortCol(key, btn) {
+  currentSort.key = key; currentSort.dir = 'desc';
+  document.querySelectorAll('.sort-col-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sortDirBtn').textContent = '↓ Desc';
+  currentPage = 1; renderTable();
+}
+function toggleSortDir() {
+  currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+  document.getElementById('sortDirBtn').textContent = currentSort.dir === 'desc' ? '↓ Desc' : '↑ Asc';
+  currentPage = 1; renderTable();
+}
+function setFilter(f, btn) {
+  currentFilter = f; currentPage = 1;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); renderTable();
+}
+function searchStudents(q) { currentSearch = q; currentPage = 1; renderTable(); }
+function sortTable(key) {
+  if (currentSort.key === key) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+  else currentSort = {key, dir:'desc'};
+  renderTable();
+}
 
 // ── PDF ───────────────────────────────────────────────────────────────
 function downloadPDF() {
   const tbody = document.getElementById('tableBody'), saved = tbody.innerHTML;
-  const all = [...data].sort((a,b) => a.rank - b.rank);
+  const all = [...data].sort((a,b) => (a.rank||999) - (b.rank||999));
   tbody.innerHTML = all.map((s, i) => {
     const pct = maxTotal > 0 ? (s.total/maxTotal)*100 : 0, isTop = s.rank<=3 && s.total>0;
     return `<tr class="${s.total===0?'no-attempt':''}"><td class="td-sno">${i+1}</td><td class="td-name">${s.name}${isTop?`<span class="topper-tag">#${s.rank}</span>`:''}</td><td><span class="badge ${s.easy>0?'badge-easy':'badge-zero'}">${s.easy}</span></td><td><span class="badge ${s.medium>0?'badge-medium':'badge-zero'}">${s.medium}</span></td><td><span class="badge ${s.hard>0?'badge-hard':'badge-zero'}">${s.hard}</span></td><td><strong>${s.total}</strong></td><td><div class="total-bar-wrap"><div class="total-bar-fill" style="width:${pct}%"></div></div></td></tr>`;
@@ -851,9 +902,8 @@ function downloadPDF() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────
-document.getElementById('skeleton').classList.add('show');
-// Set initial sheet link
-document.getElementById('sheetLink').href = `https://docs.google.com/spreadsheets/d/${CLASS_CONFIG['BCA_I'].sheetId}/edit`;
+document.getElementById('sheetLink').href =
+  `https://docs.google.com/spreadsheets/d/${CLASS_CONFIG['BCA_I'].sheetId}/edit`;
 switchClass('BCA_I');
 </script>
 </body>
